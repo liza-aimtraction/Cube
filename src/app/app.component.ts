@@ -1,32 +1,91 @@
-import { Component } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Renderer2, ViewChild } from '@angular/core';
+
+import * as THREE from 'three';
+import { FBXLoader } from '../../node_modules/three/examples/jsm/loaders/FBXLoader';
+
+
+enum EType {
+  SCROLL = 'scroll',
+  WHEEL = 'wheel'
+}
+
+interface Mixer {
+  obj: THREE.Group;
+  mixer: THREE.AnimationMixer;
+}
 
 @Component({
   selector: 'app-root',
-  template: `
-    <!--The content below is only a placeholder and can be replaced.-->
-    <div style="text-align:center" class="content">
-      <h1>
-        Welcome to {{title}}!
-      </h1>
-      <span style="display: block">{{ title }} app is running!</span>
-      <img width="300" alt="Angular Logo" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTAgMjUwIj4KICAgIDxwYXRoIGZpbGw9IiNERDAwMzEiIGQ9Ik0xMjUgMzBMMzEuOSA2My4ybDE0LjIgMTIzLjFMMTI1IDIzMGw3OC45LTQzLjcgMTQuMi0xMjMuMXoiIC8+CiAgICA8cGF0aCBmaWxsPSIjQzMwMDJGIiBkPSJNMTI1IDMwdjIyLjItLjFWMjMwbDc4LjktNDMuNyAxNC4yLTEyMy4xTDEyNSAzMHoiIC8+CiAgICA8cGF0aCAgZmlsbD0iI0ZGRkZGRiIgZD0iTTEyNSA1Mi4xTDY2LjggMTgyLjZoMjEuN2wxMS43LTI5LjJoNDkuNGwxMS43IDI5LjJIMTgzTDEyNSA1Mi4xem0xNyA4My4zaC0zNGwxNy00MC45IDE3IDQwLjl6IiAvPgogIDwvc3ZnPg==">
-    </div>
-    <h2>Here are some links to help you start: </h2>
-    <ul>
-      <li>
-        <h2><a target="_blank" rel="noopener" href="https://angular.io/tutorial">Tour of Heroes</a></h2>
-      </li>
-      <li>
-        <h2><a target="_blank" rel="noopener" href="https://angular.io/cli">CLI Documentation</a></h2>
-      </li>
-      <li>
-        <h2><a target="_blank" rel="noopener" href="https://blog.angular.io/">Angular blog</a></h2>
-      </li>
-    </ul>
-    
-  `,
+  templateUrl: 'app.component.html',
   styles: []
 })
-export class AppComponent {
-  title = 'cube';
+export class AppComponent implements AfterViewInit{
+
+  @ViewChild('cube') private cube: ElementRef
+  prevScroll: number = 0;
+  mixers: Mixer[] = [];
+  scene = new THREE.Scene();
+  camera = new THREE.OrthographicCamera( -200, 200, 200, -200);
+  
+  constructor(private renderer2: Renderer2) { }
+
+  ngAfterViewInit() { 
+    this.prevScroll = window.scrollY;
+
+    this.camera.position.set(300, 300, 300);
+    this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(600, 600);
+    this.renderer2.appendChild(this.cube.nativeElement, renderer.domElement)
+
+    const loader = new FBXLoader();
+    loader.load('../assets/cube.fbx', (obj) => {
+      this.scene.add(obj);
+      const mixer = new THREE.AnimationMixer( obj );
+      const delta = window.scrollY / 100 + 0.5;
+      mixer.clipAction(obj.animations[0]).play();
+      const m: Mixer = { obj, mixer }
+      this.update(m, delta);
+      if (m.mixer.time === 0)
+        m.mixer.update(obj.animations[0].duration - 0.5)
+      this.mixers.push(m);
+    });
+    
+    window.addEventListener( EType.SCROLL, this.onScroll, {passive: false} );
+
+    const animate = () => {
+      requestAnimationFrame( animate );
+      renderer.render( this.scene, this.camera );
+    };
+    animate();
+  }
+
+  calculateCoord(start: number, duration: number): number {
+    return duration * 100 + start;
+  }
+
+  update(m: Mixer, delta: number): void {
+    const time = m.mixer.time;
+    const duration = m.obj.animations[0].duration;
+    if(time + delta > 0 && time + delta < duration) {
+      m.mixer.update(delta);
+    } 
+  }
+
+  onScroll = () => {
+    const delta = (window.scrollY - this.prevScroll) / 100; 
+    this.prevScroll = window.scrollY;
+    this.mixers.forEach(m => {
+      this.update(m, delta)
+      console.log('SCROLL',  m.mixer.time, delta, window.scrollY); 
+    });
+  }
+
+
 }
+
+
+
+
+
